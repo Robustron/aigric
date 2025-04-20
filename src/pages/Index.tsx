@@ -4,6 +4,7 @@ import { HeroSection } from "@/components/landing/HeroSection";
 import { FeaturesSection } from "@/components/landing/FeaturesSection";
 import { HowItWorksSection } from "@/components/landing/HowItWorksSection";
 import { CtaSection } from "@/components/landing/CtaSection";
+import { RecommendationFinder } from "@/components/landing/RecommendationFinder";
 
 const Index = () => {
   return (
@@ -13,6 +14,7 @@ const Index = () => {
         <HeroSection />
         <FeaturesSection />
         <HowItWorksSection />
+        <RecommendationFinder />
         <CtaSection />
       </main>
       <Footer />
