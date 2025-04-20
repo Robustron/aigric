@@ -28,6 +28,26 @@ export default {
 					DEFAULT: 'hsl(var(--primary))',
 					foreground: 'hsl(var(--primary-foreground))'
 				},
+				farmwise: {
+					green: {
+						light: '#8BC34A',
+						DEFAULT: '#689F38',
+						dark: '#33691E'
+					},
+					soil: {
+						light: '#A1887F',
+						DEFAULT: '#795548',
+						dark: '#4E342E'
+					},
+					sky: {
+						light: '#90CAF9',
+						DEFAULT: '#42A5F5',
+						dark: '#1565C0'
+					},
+					warning: '#FF9800',
+					danger: '#F44336',
+					success: '#4CAF50'
+				},
 				secondary: {
 					DEFAULT: 'hsl(var(--secondary))',
 					foreground: 'hsl(var(--secondary-foreground))'
