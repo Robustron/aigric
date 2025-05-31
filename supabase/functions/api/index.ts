@@ -1,16 +1,61 @@
-// @ts-nocheck
+/**
+ * @file index.ts
+ * @description Supabase Edge Function that serves as the main API endpoint for the FarmWise AI Compass application.
+ * This function handles various endpoints including dashboard data, weather forecasts, and real-time farming recommendations.
+ * It integrates with OpenWeatherMap API for weather data and Google Gemini AI for intelligent farming advice.
+ */
+
+// @ts-nocheck - This is a Deno Edge Function, which uses a different module system
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2"
 
-// Define CORS headers for preflight and actual requests
+/**
+ * Interface for OpenWeatherMap API response
+ */
+interface WeatherResponse {
+  main: {
+    temp: number;
+    feels_like: number;
+    humidity: number;
+  };
+  wind: {
+    speed: number;
+  };
+  weather: Array<{
+    description: string;
+  }>;
+}
+
+/**
+ * Interface for Google Gemini API response
+ */
+interface GeminiResponse {
+  candidates: Array<{
+    content: {
+      parts: Array<{
+        text: string;
+      }>;
+    };
+  }>;
+}
+
+/**
+ * CORS headers configuration for handling cross-origin requests
+ * @constant
+ */
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*', // Allow requests from any origin (adjust for production)
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS' // Explicitly allow methods
 }
 
-// Helper function to get user-specific client
-// We initialize the client *without* the global Authorization header initially
+/**
+ * Creates a Supabase client instance with the appropriate authorization headers
+ * @param {Request} req - The incoming HTTP request
+ * @param {string} supabaseUrl - The Supabase project URL
+ * @param {string} supabaseAnonKey - The Supabase anonymous key
+ * @returns {SupabaseClient} A configured Supabase client instance
+ */
 const getSupabaseClient = (req: Request, supabaseUrl: string, supabaseAnonKey: string): SupabaseClient => {
   return createClient(
     supabaseUrl,
@@ -23,6 +68,12 @@ const getSupabaseClient = (req: Request, supabaseUrl: string, supabaseAnonKey: s
   );
 };
 
+/**
+ * Main request handler for the Edge Function
+ * Routes requests to appropriate endpoints based on the URL path
+ * @param {Request} req - The incoming HTTP request
+ * @returns {Promise<Response>} The HTTP response
+ */
 serve(async (req) => {
   console.log(`API function invoked. Method: ${req.method}, URL: ${req.url}`);
 
@@ -53,6 +104,11 @@ serve(async (req) => {
   try {
     // Route API requests based on the last part of the path
     switch (endpoint) {
+      /**
+       * Dashboard endpoint
+       * Returns recent weather data and top recommendations for user's locations
+       * Requires authentication
+       */
       case 'dashboard': {
         // Initialize client *with* Auth header for this protected endpoint
         const supabaseClient = getSupabaseClient(req, supabaseUrl, supabaseAnonKey);
@@ -123,6 +179,11 @@ serve(async (req) => {
         });
       }
 
+      /**
+       * Forecast endpoint
+       * Returns 5-day weather forecast for a specific location
+       * Can be accessed with either locationId or lat/lon coordinates
+       */
       case 'forecast': {
         console.log("Handling /forecast endpoint");
          if (req.method !== 'GET') {
@@ -166,8 +227,11 @@ serve(async (req) => {
         });
       }
       
-      // --- Add other endpoints here as needed ---
-      // Example: Endpoint to mark a recommendation as read
+      /**
+       * Mark recommendation as read endpoint
+       * Updates the is_read status of a specific recommendation
+       * Requires authentication
+       */
       case 'mark-recommendation-read': {
          // Initialize client *with* Auth header for this protected endpoint
         const supabaseClient = getSupabaseClient(req, supabaseUrl, supabaseAnonKey);
@@ -213,7 +277,12 @@ serve(async (req) => {
           return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
-      // --- NEW ENDPOINT --- 
+      /**
+       * Real-time recommendation endpoint
+       * Provides instant farming recommendations based on current location and weather
+       * Integrates with OpenWeatherMap API and Google Gemini AI
+       * No authentication required
+       */
       case 'recommend-on-the-fly': {
         console.log("Handling /recommend-on-the-fly endpoint");
         if (req.method !== 'POST') {
@@ -245,7 +314,7 @@ serve(async (req) => {
         }
 
         // 1. Fetch Current Weather from OpenWeatherMap
-        let currentWeatherData: any = null; // Using 'any' for simplicity with external API
+        let currentWeatherData: WeatherResponse | null = null;
         try {
           const weatherApiUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${weatherApiKey}&units=metric`;
           console.log(`Fetching current weather from: ${weatherApiUrl}`);
@@ -321,22 +390,17 @@ Do not include any introductory text, markdown formatting, code fences, or expla
           };
 
           console.log("Sending request to Gemini API...");
-          const geminiResponse = await fetch(geminiApiUrl, {
+          const geminiResponse: GeminiResponse = await fetch(geminiApiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(geminiRequestBody)
-          });
+          }).then(res => res.json());
 
-          if (!geminiResponse.ok) {
-            const errorText = await geminiResponse.text();
-            throw new Error(`Gemini API Error (${geminiResponse.status}): ${errorText}`);
+          if (!geminiResponse.candidates || geminiResponse.candidates.length === 0) {
+            throw new Error("No content found in Gemini response.");
           }
 
-          const geminiResult = await geminiResponse.json();
-          console.log("Received raw Gemini result:", JSON.stringify(geminiResult)); // Log the raw result
-
-          // Extract the text content and attempt to parse it as JSON
-          const textContent = geminiResult.candidates?.[0]?.content?.parts?.[0]?.text;
+          const textContent = geminiResponse.candidates[0].content.parts[0].text;
           if (!textContent) {
             throw new Error("No content found in Gemini response.");
           }
